@@ -1,0 +1,32 @@
+{
+  "name": "vscode-web-rolldown",
+  "displayName": "vscode-web-rolldown",
+  "description": "HelloWorld example for VS Code",
+  "version": "0.0.1",
+  "publisher": "danielrkling",
+  "repository": "https://github.com/danielrkling/vscode-bundle",
+  "engines": {
+    "vscode": "^1.51.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vscode-web-rolldown.bundle",
+        "title": "Bundle"
+      }
+    ]
+  },
+  "devDependencies": {
+    "@secretlint/node": "^10.1.1",
+    "@types/node": "^8.10.25",
+    "@types/vscode": "^1.51.0",
+    "@vscode/vsce": "^3.6.0",
+    "tslint": "^5.16.0",
+    "typescript": "^3.4.5"
+  }
+}
