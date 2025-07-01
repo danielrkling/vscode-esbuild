@@ -1,31 +1,43 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 const vscode = require('vscode')
 const fs = vscode.workspace.fs
-
-
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
 
 /**
  * 
  * @param {vscode.ExtensionContext} context 
  */
-export function activate(context) {
+exports.activate = function (context) {
 
-  // The command has been defined in the package.json file
-  // Now provide the implementation of the command with registerCommand
-  // The commandId parameter must match the command field in package.json
-  let disposable = vscode.commands.registerCommand('vscode-web-rolldown.bundle', () => {
-    // The code you place here will be executed every time your command is executed
+  let disposable = vscode.commands.registerCommand('vscodeWebRolldown.bundle', async () => {
 
+    const config = vscode.workspace.getConfiguration('vscodeWebRolldown');
+    const configFilePathSetting = config.get('configFilePath');
 
+    if (!configFilePathSetting) {
+      vscode.window.showErrorMessage('VSCode Web Rolldown: Configuration file path is not set in settings. Please configure "vscodeWebRolldown.configFilePath".');
+      return;
+    }
 
-    fs.readFile("rolldown.config.js").then(results=> {
-      vscode.window.showInformationMessage(results)
-      fs.writeFile("main.js","console.log(1)")
-    
-    })
+    if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+      vscode.window.showErrorMessage('VSCode Web Rolldown: No workspace folder open. Please open a folder to use this extension.');
+      return;
+    }
+
+    const workspaceRootUri = vscode.workspace.workspaceFolders[0].uri;
+    const configUri = vscode.Uri.joinPath(workspaceRootUri, configFilePathSetting);
+
+    vscode.window.showInformationMessage(`Attempting to read config from: ${configUri.fsPath}`);
+
+    const fileContent = await fs.readFile(configUri);
+
+    vscode.window.showInformationMessage(`Successfully read config file. Content length: ${fileContent.length} characters.`);
+    console.log('Rolldown Config Content:', fileContent); // Log to VS Code's Debug Console
+
+    // 5. Example: Write a file (as in original code)
+    //    fs.writeFile expects Uint8Array or Buffer.
+    const mainJsUri = vscode.Uri.joinPath(workspaceRootUri, "main.js");
+    await fs.writeFile(mainJsUri, fileContent);
+
+    vscode.window.showInformationMessage('VSCode Web Rolldown: Bundling complete. Check main.js!');
 
   });
 
@@ -33,4 +45,4 @@ export function activate(context) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {}
+exports.deactivate = function () { }

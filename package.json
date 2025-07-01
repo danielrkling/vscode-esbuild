@@ -2,7 +2,7 @@
   "name": "vscode-web-rolldown",
   "displayName": "vscode-web-rolldown",
   "description": "HelloWorld example for VS Code",
-  "version": "0.0.3",
+  "version": "0.0.9",
   "publisher": "danielrkling",
   "repository": "https://github.com/danielrkling/vscode-bundle",
   "engines": {
@@ -18,10 +18,20 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscode-web-rolldown.bundle",
+        "command": "vscodeWebRolldown.bundle",
         "title": "Bundle"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "VSCode Web Rolldown Configuration",
+      "properties": {
+        "vscodeWebRolldown.configFilePath": {
+          "type": "string",
+          "default": "rolldown.config.js",
+          "description": "Specify the path to your rolldown configuration file (relative to the workspace root)."
+        }
+      }
+    }
   },
   "devDependencies": {
     "@secretlint/node": "^10.1.1",
