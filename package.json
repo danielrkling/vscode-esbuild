@@ -2,7 +2,7 @@
   "name": "vscode-web-rolldown",
   "displayName": "vscode-web-rolldown",
   "description": "HelloWorld example for VS Code",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "publisher": "danielrkling",
   "repository": "https://github.com/danielrkling/vscode-bundle",
   "engines": {
@@ -13,6 +13,8 @@
   ],
   "activationEvents": [],
   "main": "./extension.js",
+  "browser": "./extension.js",
+  "files":["extension.js","LICENSE"],
   "contributes": {
     "commands": [
       {
