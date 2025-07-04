@@ -24,26 +24,40 @@ export async function activate(context: ExtensionContext) {
 
   commands.registerCommand("vscode-web-esbuild.build", async (uri) => {
     if (uri instanceof Uri) {
-      outputWindow.appendLine(`Building from URI: ${uri.toString()}`);
+      await buildFromUri(uri);
+    } else {
+      const uri = Uri.joinPath(
+        workspace.workspaceFolders![0].uri,
+        workspace.getConfiguration("vscode-web-esbuild").get("entryPoint") ||
+          "src/index.ts"
+      );
       await buildFromUri(uri);
     }
   });
-
-
 }
 
 async function buildFromUri(uri: Uri) {
   try {
+    outputWindow.appendLine(`Building from URI: ${uri.toString()}`);
+    // const tsconfig = await workspace.fs.readFile(Uri.joinPath(workspace.workspaceFolders![0].uri,
+    //     workspace.getConfiguration("vscode-web-esbuild").get("tsconfig") || "tsconfig.json"
+    //   ))
     const result = await esbuild.build({
       entryPoints: [uri.toString()],
       bundle: true,
       plugins: [vscodeFsPlugin()],
-      format: "esm",
-      outdir: "dist",
+      format: workspace.getConfiguration("vscode-web-esbuild").get("format"),
+      outdir: workspace.getConfiguration("vscode-web-esbuild").get("outdir"),
+      minify: workspace.getConfiguration("vscode-web-esbuild").get("minify"),
+    //   tsconfigRaw: tsconfig
+      //   sourcemap: workspace
+      //     .getConfiguration("vscode-web-esbuild")
+      //     .get("sourcemap"),
     });
     result.outputFiles?.forEach((file) => {
-      outputWindow.appendLine(`Output file: ${file.path}`);
-      outputWindow.appendLine(file.text);
+      outputWindow.appendLine(
+        `Output file complete: ${file.path} - ${file.contents.length} bytes`
+      );
       if (!workspace.workspaceFolders) {
         outputWindow.appendLine("No workspace folders found.");
         return;
@@ -65,10 +79,6 @@ function vscodeFsPlugin(): esbuild.Plugin {
     name: "vscode-fs",
     setup(build) {
       build.onResolve({ filter: /.*/ }, async (args: esbuild.OnResolveArgs) => {
-        outputWindow.appendLine(
-          `Resolving: ${args.path} from ${args.importer}`
-        );
-
         if (args.path.startsWith(".")) {
           const index = args.importer.lastIndexOf("/");
 
@@ -86,7 +96,6 @@ function vscodeFsPlugin(): esbuild.Plugin {
 
       build.onLoad({ filter: /.*/, namespace: "vscode-fs" }, async (args) => {
         try {
-          outputWindow.appendLine(`Loading file: ${args.path}`);
           const bytes = await workspace.fs.readFile(Uri.parse(args.path));
           return {
             contents: bytes,

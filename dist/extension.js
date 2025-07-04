@@ -2438,23 +2438,35 @@ async function activate(context) {
   }
   vscode.commands.registerCommand("vscode-web-esbuild.build", async (uri) => {
     if (uri instanceof vscode.Uri) {
-      outputWindow.appendLine(`Building from URI: ${uri.toString()}`);
       await buildFromUri(uri);
+    } else {
+      const uri2 = vscode.Uri.joinPath(
+        vscode.workspace.workspaceFolders[0].uri,
+        vscode.workspace.getConfiguration("vscode-web-esbuild").get("entryPoint") || "src/index.ts"
+      );
+      await buildFromUri(uri2);
     }
   });
 }
 async function buildFromUri(uri) {
   try {
+    outputWindow.appendLine(`Building from URI: ${uri.toString()}`);
     const result = await browserExports.build({
       entryPoints: [uri.toString()],
       bundle: true,
       plugins: [vscodeFsPlugin()],
-      format: "esm",
-      outdir: "dist"
+      format: vscode.workspace.getConfiguration("vscode-web-esbuild").get("format"),
+      outdir: vscode.workspace.getConfiguration("vscode-web-esbuild").get("outdir"),
+      minify: vscode.workspace.getConfiguration("vscode-web-esbuild").get("minify")
+      //   tsconfigRaw: tsconfig
+      //   sourcemap: workspace
+      //     .getConfiguration("vscode-web-esbuild")
+      //     .get("sourcemap"),
     });
     result.outputFiles?.forEach((file) => {
-      outputWindow.appendLine(`Output file: ${file.path}`);
-      outputWindow.appendLine(file.text);
+      outputWindow.appendLine(
+        `Output file complete: ${file.path} - ${file.contents.length} bytes`
+      );
       if (!vscode.workspace.workspaceFolders) {
         outputWindow.appendLine("No workspace folders found.");
         return;
@@ -2475,9 +2487,6 @@ function vscodeFsPlugin() {
     name: "vscode-fs",
     setup(build) {
       build.onResolve({ filter: /.*/ }, async (args) => {
-        outputWindow.appendLine(
-          `Resolving: ${args.path} from ${args.importer}`
-        );
         if (args.path.startsWith(".")) {
           const index = args.importer.lastIndexOf("/");
           return {
@@ -2492,7 +2501,6 @@ function vscodeFsPlugin() {
       });
       build.onLoad({ filter: /.*/, namespace: "vscode-fs" }, async (args) => {
         try {
-          outputWindow.appendLine(`Loading file: ${args.path}`);
           const bytes = await vscode.workspace.fs.readFile(vscode.Uri.parse(args.path));
           return {
             contents: bytes,
