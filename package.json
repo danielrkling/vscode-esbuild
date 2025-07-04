@@ -1,11 +1,10 @@
 {
-  "name": "vscode-web-rolldown",
-  "displayName": "vscode-web-rolldown",
-  "description": "HelloWorld example for VS Code",
-  "version": "0.0.9",
+  "name": "vscode-web-esbuild",
+  "displayName": "ESBuild for VS Code Web",
+  "description": "ESBuild for VS Code Web",
+  "version": "0.1.2",
   "publisher": "danielrkling",
   "repository": "https://github.com/danielrkling/vscode-bundle",
-  "type": "module",
   "engines": {
     "vscode": "^1.51.0"
   },
@@ -22,19 +21,17 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscodeWebRolldown.bundle",
-        "title": "Bundle"
+        "command": "vscode-web-esbuild.build",
+        "title": "Build"
       }
     ],
-    "configuration": {
-      "title": "VSCode Web Rolldown Configuration",
-      "properties": {
-        "vscodeWebRolldown.configFilePath": {
-          "type": "string",
-          "default": "src/main.ts",
-          "description": "Specify the path to your rolldown configuration file (relative to the workspace root)."
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "vscode-web-esbuild.build",
+          "group": "modification@1"
         }
-      }
+      ]
     }
   },
   "scripts": {
@@ -46,12 +43,17 @@
     "@types/vscode": "^1.51.0",
     "@vscode/test-web": "^0.0.71",
     "@vscode/vsce": "^3.6.0",
+    "@vscode/wasm-component-model": "^1.0.2",
     "rolldown": "^1.0.0-beta.23",
     "tslint": "^5.16.0",
     "typescript": "^3.4.5",
-    "vite": "^7.0.2"
+    "vite": "^7.0.2",
+    "vite-plugin-static-copy": "^3.1.0"
   },
   "dependencies": {
-    "esbuild": "^0.25.5"
+    "@rolldown/browser": "^1.0.0-beta.23",
+    "@vscode/wasm-wasi": "^1.0.1",
+    "esbuild": "^0.25.5",
+    "esbuild-wasm": "^0.25.5"
   }
 }

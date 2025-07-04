@@ -1,45 +1,103 @@
-import * as vscode from "vscode";
+import {
+  commands,
+  ExtensionContext,
+  window,
+  workspace,
+  Uri,
+  OutputChannel,
+} from "vscode";
+import * as esbuild from "esbuild-wasm";
 
-export async function activate(context: vscode.ExtensionContext) {
-  const fs = vscode.workspace.fs;
+let initialized = false;
+let outputWindow: OutputChannel;
 
+export async function activate(context: ExtensionContext) {
+  if (!initialized) {
+    await esbuild.initialize({
+      worker: true,
+      wasmURL: "https://unpkg.com/esbuild-wasm/esbuild.wasm",
+    });
+    initialized = true;
+    outputWindow = window.createOutputChannel("esbuild");
+    outputWindow.show();
+  }
 
-  let disposable = vscode.commands.registerCommand(
-    "vscodeWebRolldown.bundle",
-    async () => {
-      const config = vscode.workspace.getConfiguration("vscodeWebRolldown");
-      const configFilePathSetting = config.get("configFilePath") as string;
-
-      if (!configFilePathSetting) {
-        vscode.window.showErrorMessage(
-          'VSCode Web Rolldown: Configuration file path is not set in settings. Please configure "vscodeWebRolldown.configFilePath".'
-        );
-        return;
-      }
-
-      if (
-        !vscode.workspace.workspaceFolders ||
-        vscode.workspace.workspaceFolders.length === 0
-      ) {
-        vscode.window.showErrorMessage(
-          "VSCode Web Rolldown: No workspace folder open. Please open a folder to use this extension."
-        );
-        return;
-      }
-
-      const workspaceRootUri = vscode.workspace.workspaceFolders[0].uri;
-      const configUri = vscode.Uri.joinPath(
-        workspaceRootUri,
-        configFilePathSetting
-      );
-
-
-      
+  commands.registerCommand("vscode-web-esbuild.build", async (uri) => {
+    if (uri instanceof Uri) {
+      outputWindow.appendLine(`Building from URI: ${uri.toString()}`);
+      await buildFromUri(uri);
     }
-  );
+  });
 
-  context.subscriptions.push(disposable);
+
 }
 
-// this method is called when your extension is deactivated
-export function deactivate() {}
+async function buildFromUri(uri: Uri) {
+  try {
+    const result = await esbuild.build({
+      entryPoints: [uri.toString()],
+      bundle: true,
+      plugins: [vscodeFsPlugin()],
+      format: "esm",
+      outdir: "dist",
+    });
+    result.outputFiles?.forEach((file) => {
+      outputWindow.appendLine(`Output file: ${file.path}`);
+      outputWindow.appendLine(file.text);
+      if (!workspace.workspaceFolders) {
+        outputWindow.appendLine("No workspace folders found.");
+        return;
+      }
+      workspace.fs.writeFile(
+        Uri.joinPath(workspace.workspaceFolders[0].uri, file.path),
+        file.contents
+      );
+    });
+  } catch (error) {
+    outputWindow.appendLine(
+      `Error: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+function vscodeFsPlugin(): esbuild.Plugin {
+  return {
+    name: "vscode-fs",
+    setup(build) {
+      build.onResolve({ filter: /.*/ }, async (args: esbuild.OnResolveArgs) => {
+        outputWindow.appendLine(
+          `Resolving: ${args.path} from ${args.importer}`
+        );
+
+        if (args.path.startsWith(".")) {
+          const index = args.importer.lastIndexOf("/");
+
+          return {
+            path: args.importer.slice(0, index) + args.path.slice(1),
+            namespace: "vscode-fs",
+          };
+        }
+
+        return {
+          path: args.path,
+          namespace: "vscode-fs",
+        };
+      });
+
+      build.onLoad({ filter: /.*/, namespace: "vscode-fs" }, async (args) => {
+        try {
+          outputWindow.appendLine(`Loading file: ${args.path}`);
+          const bytes = await workspace.fs.readFile(Uri.parse(args.path));
+          return {
+            contents: bytes,
+            loader: "default",
+          };
+        } catch (err) {
+          return {
+            errors: [{ text: `Failed to read file: ${args.path}` }],
+          };
+        }
+      });
+    },
+  };
+}
