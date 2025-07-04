@@ -5,6 +5,7 @@
   "version": "0.0.9",
   "publisher": "danielrkling",
   "repository": "https://github.com/danielrkling/vscode-bundle",
+  "type": "module",
   "engines": {
     "vscode": "^1.51.0"
   },
@@ -12,9 +13,12 @@
     "Other"
   ],
   "activationEvents": [],
-  "main": "./extension.js",
-  "browser": "./extension.js",
-  "files":["extension.js","LICENSE"],
+  "main": "./dist/extension.js",
+  "browser": "./dist/extension.js",
+  "files": [
+    "dist/*",
+    "LICENSE"
+  ],
   "contributes": {
     "commands": [
       {
@@ -27,18 +31,27 @@
       "properties": {
         "vscodeWebRolldown.configFilePath": {
           "type": "string",
-          "default": "rolldown.config.js",
+          "default": "src/main.ts",
           "description": "Specify the path to your rolldown configuration file (relative to the workspace root)."
         }
       }
     }
   },
+  "scripts": {
+    "test": "vscode-test-web --extensionDevelopmentPath=. .",
+    "build": "vite build"
+  },
   "devDependencies": {
     "@secretlint/node": "^10.1.1",
-    "@types/node": "^8.10.25",
     "@types/vscode": "^1.51.0",
+    "@vscode/test-web": "^0.0.71",
     "@vscode/vsce": "^3.6.0",
+    "rolldown": "^1.0.0-beta.23",
     "tslint": "^5.16.0",
-    "typescript": "^3.4.5"
+    "typescript": "^3.4.5",
+    "vite": "^7.0.2"
+  },
+  "dependencies": {
+    "esbuild": "^0.25.5"
   }
 }
