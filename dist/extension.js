@@ -2424,6 +2424,126 @@ ${file}:${line}:${column}: ERROR: ${pluginText}${e.text}`;
   return browser.exports;
 }
 var browserExports = requireBrowser();
+function fsPlugin() {
+  return {
+    name: "vscode-fs",
+    setup(build) {
+      build.onResolve({ filter: /.*/ }, async (args) => {
+        const absPath = getPath(args);
+        const path = await getExtension(absPath);
+        if (path) {
+          return {
+            path,
+            namespace: "vscode-fs"
+          };
+        }
+      });
+      build.onLoad({ filter: /.*/, namespace: "vscode-fs" }, async (args) => {
+        try {
+          const bytes = await vscode.workspace.fs.readFile(vscode.Uri.parse(args.path));
+          return {
+            contents: bytes,
+            loader: "default"
+          };
+        } catch (err) {
+          return {
+            errors: [{ text: `Failed to read file: ${args.path}` }]
+          };
+        }
+      });
+    }
+  };
+}
+function getPath(args) {
+  if (args.path.startsWith("/")) {
+    return vscode.Uri.joinPath(
+      vscode.workspace.workspaceFolders[0].uri,
+      args.path
+    ).toString();
+  }
+  if (args.path.startsWith("./")) {
+    const index = args.importer.lastIndexOf("/");
+    return args.importer.slice(0, index) + args.path.slice(1);
+  }
+  if (args.path.startsWith("../")) {
+    const parts = args.path.split("/");
+    const importerParts = args.importer.split("/");
+    importerParts.pop();
+    let i = 0;
+    for (const part of parts) {
+      if (part === "..") {
+        importerParts.pop();
+        i++;
+      } else {
+        break;
+      }
+    }
+    return importerParts.concat(parts.slice(i)).join("/");
+  }
+  return args.path;
+}
+async function getExtension(path) {
+  if (await fileExists(path)) {
+    return path;
+  }
+  if (await fileExists(path + ".tsx")) {
+    return path + ".tsx";
+  }
+  if (await fileExists(path + ".js")) {
+    return path + ".js";
+  }
+  if (await fileExists(path + ".ts")) {
+    return path + ".ts";
+  }
+  if (await fileExists(path + ".jsx")) {
+    return path + ".jsx";
+  }
+}
+async function fileExists(path) {
+  try {
+    const stat = await vscode.workspace.fs.stat(vscode.Uri.parse(path));
+    return stat.type === vscode.FileType.File;
+  } catch (err) {
+    return false;
+  }
+}
+function httpPlugin() {
+  return {
+    name: "browser-resolver",
+    async setup(build) {
+      build.onResolve({ filter: /^http[s]{0,1}:\/\// }, (args) => ({
+        path: args.path,
+        namespace: "http-url"
+      }));
+      build.onResolve({ filter: /.*/, namespace: "http-url" }, (args) => ({
+        path: new URL(args.path, args.importer).toString(),
+        namespace: "http-url"
+      }));
+      build.onLoad({ filter: /.*/, namespace: "http-url" }, async (args) => {
+        const url = new URL(args.path);
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch ${url}: status=${res.statusText}`);
+        }
+        const body = await res.text();
+        return {
+          contents: body,
+          // ESBuild can't get extension from a URL so it falls back to js loader.
+          loader: resolveLoader(url)
+        };
+      });
+    }
+  };
+}
+function resolveLoader(url) {
+  if (url.pathname.endsWith(".ts")) {
+    return "ts";
+  }
+  if (url.pathname.endsWith(".tsx")) {
+    return "tsx";
+  }
+  return void 0;
+}
 let initialized = false;
 let outputWindow;
 async function activate(context) {
@@ -2454,7 +2574,7 @@ async function buildFromUri(uri) {
     const result = await browserExports.build({
       entryPoints: [uri.toString()],
       bundle: true,
-      plugins: [vscodeFsPlugin()],
+      plugins: [httpPlugin(), fsPlugin()],
       format: vscode.workspace.getConfiguration("vscode-web-esbuild").get("format"),
       outdir: vscode.workspace.getConfiguration("vscode-web-esbuild").get("outdir"),
       minify: vscode.workspace.getConfiguration("vscode-web-esbuild").get("minify")
@@ -2481,38 +2601,5 @@ async function buildFromUri(uri) {
       `Error: ${error instanceof Error ? error.message : String(error)}`
     );
   }
-}
-function vscodeFsPlugin() {
-  return {
-    name: "vscode-fs",
-    setup(build) {
-      build.onResolve({ filter: /.*/ }, async (args) => {
-        if (args.path.startsWith(".")) {
-          const index = args.importer.lastIndexOf("/");
-          return {
-            path: args.importer.slice(0, index) + args.path.slice(1),
-            namespace: "vscode-fs"
-          };
-        }
-        return {
-          path: args.path,
-          namespace: "vscode-fs"
-        };
-      });
-      build.onLoad({ filter: /.*/, namespace: "vscode-fs" }, async (args) => {
-        try {
-          const bytes = await vscode.workspace.fs.readFile(vscode.Uri.parse(args.path));
-          return {
-            contents: bytes,
-            loader: "default"
-          };
-        } catch (err) {
-          return {
-            errors: [{ text: `Failed to read file: ${args.path}` }]
-          };
-        }
-      });
-    }
-  };
 }
 exports.activate = activate;
