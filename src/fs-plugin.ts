@@ -34,7 +34,7 @@ export function fsPlugin(): Plugin {
 }
 
 function getPath(args: OnResolveArgs): string {
-  if (args.path.startsWith("/")) {
+  if (args.path.startsWith("/") || args.kind === "entry-point") {
     return Uri.joinPath(
       workspace.workspaceFolders![0].uri,
       args.path
@@ -50,41 +50,40 @@ function getPath(args: OnResolveArgs): string {
     const parts = args.path.split("/");
     const importerParts = args.importer.split("/");
     importerParts.pop();
-    let i = 0
+    let i = 0;
     for (const part of parts) {
       if (part === "..") {
         importerParts.pop(); // Go up one directory
-        i++
-      }else{
-        break
+        i++;
+      } else {
+        break;
       }
     }
-     // Remove the last part (file name)
+    // Remove the last part (file name)
     return importerParts.concat(parts.slice(i)).join("/");
   }
 
   return args.path;
 }
 
+const extensions = [
+  "",
+  ".ts",
+  ".tsx",
+  ".js",  
+  ".jsx",
+  "/index.ts",
+  "/index.tsx",
+  "/index.js",
+  "/index.jsx",
+];
+
 async function getExtension(path: string): Promise<string | undefined> {
-  if (await fileExists(path)) {
-    return path;
-  }
-
-  if (await fileExists(path + ".tsx")) {
-    return path + ".tsx";
-  }
-
-  if (await fileExists(path + ".js")) {
-    return path + ".js";
-  }
-
-  if (await fileExists(path + ".ts")) {
-    return path + ".ts";
-  }
-
-  if (await fileExists(path + ".jsx")) {
-    return path + ".jsx";
+  for (const ext of extensions) {
+    const fullPath = path + ext;
+    if (await fileExists(fullPath)) {
+      return fullPath;
+    }
   }
 }
 

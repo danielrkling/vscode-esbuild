@@ -1,11 +1,12 @@
-import { Plugin } from "esbuild-wasm";
+import { Loader, Plugin } from "esbuild-wasm";
+
 export function httpPlugin(): Plugin {
   return {
     name: "browser-resolver",
     async setup(build) {
       // Intercept import paths starting with "https://" or "http://" so
       // esbuild doesn't attempt to map them to a file system location.
-      build.onResolve({ filter: /^http[s]{0,1}:\/\// }, (args) => ({
+      build.onResolve({ filter: /^https?:\/\// }, (args) => ({
         path: args.path,
         namespace: "http-url",
       }));
@@ -29,24 +30,40 @@ export function httpPlugin(): Plugin {
           throw new Error(`Failed to fetch ${url}: status=${res.statusText}`);
         }
 
-        const body = await res.text();
+        const contents = await res.text();
         return {
-          contents: body,
+          contents,
           // ESBuild can't get extension from a URL so it falls back to js loader.
-          loader: resolveLoader(url),
+          loader: resolveLoader(url.pathname),
         };
       });
     },
   };
 }
 
-function resolveLoader(url: URL) {
-  if (url.pathname.endsWith(".ts")) {
+function resolveLoader(path: string): Loader | undefined {
+  if (path.endsWith(".ts")) {
     return "ts";
   }
 
-  if (url.pathname.endsWith(".tsx")) {
+  if (path.endsWith(".tsx")) {
     return "tsx";
+  }
+
+  if (path.endsWith(".jsx")) {
+    return "jsx";
+  }
+
+  if (path.endsWith(".js") || path.endsWith(".mjs") || path.endsWith(".cjs")) {
+    return "js";
+  }
+
+  if (path.endsWith(".json")) {
+    return "json";
+  }
+
+  if (path.endsWith(".css")) {
+    return "css";
   }
 
   return undefined;

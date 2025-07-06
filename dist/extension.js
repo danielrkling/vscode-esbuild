@@ -2455,7 +2455,7 @@ function fsPlugin() {
   };
 }
 function getPath(args) {
-  if (args.path.startsWith("/")) {
+  if (args.path.startsWith("/") || args.kind === "entry-point") {
     return vscode.Uri.joinPath(
       vscode.workspace.workspaceFolders[0].uri,
       args.path
@@ -2482,21 +2482,23 @@ function getPath(args) {
   }
   return args.path;
 }
+const extensions = [
+  "",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  "/index.ts",
+  "/index.tsx",
+  "/index.js",
+  "/index.jsx"
+];
 async function getExtension(path) {
-  if (await fileExists(path)) {
-    return path;
-  }
-  if (await fileExists(path + ".tsx")) {
-    return path + ".tsx";
-  }
-  if (await fileExists(path + ".js")) {
-    return path + ".js";
-  }
-  if (await fileExists(path + ".ts")) {
-    return path + ".ts";
-  }
-  if (await fileExists(path + ".jsx")) {
-    return path + ".jsx";
+  for (const ext of extensions) {
+    const fullPath = path + ext;
+    if (await fileExists(fullPath)) {
+      return fullPath;
+    }
   }
 }
 async function fileExists(path) {
@@ -2511,7 +2513,7 @@ function httpPlugin() {
   return {
     name: "browser-resolver",
     async setup(build) {
-      build.onResolve({ filter: /^http[s]{0,1}:\/\// }, (args) => ({
+      build.onResolve({ filter: /^https?:\/\// }, (args) => ({
         path: args.path,
         namespace: "http-url"
       }));
@@ -2525,27 +2527,40 @@ function httpPlugin() {
         if (!res.ok) {
           throw new Error(`Failed to fetch ${url}: status=${res.statusText}`);
         }
-        const body = await res.text();
+        const contents = await res.text();
         return {
-          contents: body,
+          contents,
           // ESBuild can't get extension from a URL so it falls back to js loader.
-          loader: resolveLoader(url)
+          loader: resolveLoader(url.pathname)
         };
       });
     }
   };
 }
-function resolveLoader(url) {
-  if (url.pathname.endsWith(".ts")) {
+function resolveLoader(path) {
+  if (path.endsWith(".ts")) {
     return "ts";
   }
-  if (url.pathname.endsWith(".tsx")) {
+  if (path.endsWith(".tsx")) {
     return "tsx";
+  }
+  if (path.endsWith(".jsx")) {
+    return "jsx";
+  }
+  if (path.endsWith(".js") || path.endsWith(".mjs") || path.endsWith(".cjs")) {
+    return "js";
+  }
+  if (path.endsWith(".json")) {
+    return "json";
+  }
+  if (path.endsWith(".css")) {
+    return "css";
   }
   return void 0;
 }
 let initialized = false;
 let outputWindow;
+let watcher;
 async function activate(context) {
   if (!initialized) {
     await browserExports.initialize({
@@ -2556,41 +2571,61 @@ async function activate(context) {
     outputWindow = vscode.window.createOutputChannel("esbuild");
     outputWindow.show();
   }
-  vscode.commands.registerCommand("vscode-web-esbuild.build", async (uri) => {
-    if (uri instanceof vscode.Uri) {
-      await buildFromUri(uri);
+  vscode.commands.registerCommand("vscode-web-esbuild.build", buildConfig);
+  vscode.commands.registerCommand("vscode-web-esbuild.watch", async () => {
+    if (watcher) {
+      watcher.dispose();
+      watcher = void 0;
+    }
+    const glob = vscode.workspace.getConfiguration("vscode-web-esbuild").get("glob");
+    watcher = vscode.workspace.createFileSystemWatcher(glob);
+    watcher.onDidChange(buildConfig);
+    watcher.onDidCreate(buildConfig);
+    watcher.onDidDelete(buildConfig);
+    outputWindow.appendLine(`Starting file watcher for ${glob}`);
+    buildConfig();
+  });
+  vscode.commands.registerCommand("vscode-web-esbuild.unwatch", async () => {
+    if (watcher) {
+      watcher.dispose();
+      watcher = void 0;
+      outputWindow.appendLine("Stopped watching files.");
     } else {
-      const uri2 = vscode.Uri.joinPath(
-        vscode.workspace.workspaceFolders[0].uri,
-        vscode.workspace.getConfiguration("vscode-web-esbuild").get("entryPoint") || "src/index.ts"
-      );
-      await buildFromUri(uri2);
+      outputWindow.appendLine("No watcher is currently active.");
     }
   });
 }
-async function buildFromUri(uri) {
+async function getConfig() {
   try {
-    outputWindow.appendLine(`Building from URI: ${uri.toString()}`);
+    const configPath = vscode.workspace.getConfiguration("vscode-web-esbuild").get("configPath") || "esbuild.config.json";
+    outputWindow.appendLine(`Reading config file: ${configPath.toString()}`);
+    const buffer = await vscode.workspace.fs.readFile(
+      vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, configPath)
+    );
+    const configContents = await vscode.workspace.decode(buffer);
+    const config = JSON.parse(configContents);
+    return config;
+  } catch (error) {
+    outputWindow.appendLine(
+      `Error reading config file: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+async function buildConfig() {
+  try {
+    if (!vscode.workspace.workspaceFolders) {
+      outputWindow.appendLine("No workspace folders found.");
+      return;
+    }
+    const config = await getConfig();
     const result = await browserExports.build({
-      entryPoints: [uri.toString()],
-      bundle: true,
       plugins: [httpPlugin(), fsPlugin()],
-      format: vscode.workspace.getConfiguration("vscode-web-esbuild").get("format"),
-      outdir: vscode.workspace.getConfiguration("vscode-web-esbuild").get("outdir"),
-      minify: vscode.workspace.getConfiguration("vscode-web-esbuild").get("minify")
-      //   tsconfigRaw: tsconfig
-      //   sourcemap: workspace
-      //     .getConfiguration("vscode-web-esbuild")
-      //     .get("sourcemap"),
+      ...config
     });
     result.outputFiles?.forEach((file) => {
       outputWindow.appendLine(
         `Output file complete: ${file.path} - ${file.contents.length} bytes`
       );
-      if (!vscode.workspace.workspaceFolders) {
-        outputWindow.appendLine("No workspace folders found.");
-        return;
-      }
       vscode.workspace.fs.writeFile(
         vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, file.path),
         file.contents

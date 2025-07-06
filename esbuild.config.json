@@ -1,0 +1,9 @@
+{
+    "entryPoints": [
+        "/test/main.ts"
+    ],
+    "bundle": true,
+    "outdir": "dist",
+    "minify": false,
+    "format": "esm"
+}

@@ -1,8 +1,8 @@
 {
   "name": "vscode-web-esbuild",
-  "displayName": "ESBuild for VS Code Web",
-  "description": "ESBuild for VS Code Web",
-  "version": "0.1.4",
+  "displayName": "ESBuild - VS Code Web",
+  "description": "Use esbuild-wasm to bundle your project in VS Code Web.",
+  "version": "0.2.0",
   "publisher": "danielrkling",
   "repository": "https://github.com/danielrkling/vscode-bundle",
   "engines": {
@@ -22,46 +22,36 @@
     "commands": [
       {
         "command": "vscode-web-esbuild.build",
-        "title": "ESBuild - Bundle"
+        "title": "ESBuild - Build"
+      },
+      {
+        "command": "vscode-web-esbuild.watch",
+        "title": "ESBuild - Watch"
+      },
+            {
+        "command": "vscode-web-esbuild.unwatch",
+        "title": "ESBuild - Unwatch"
       }
     ],
-    "menus": {
-      "explorer/context": [
-        {
-          "command": "vscode-web-esbuild.build",
-          "group": "modification@1"
-          
-        }
-      ]
-    },
+    "keybindings": [
+      {
+        "command": "vscode-web-esbuild.build",
+        "key": "ctrl+alt+b"
+      }
+    ],
     "configuration": {
       "title": "ESBuild",
       "type": "object",
       "properties": {
-        "vscode-web-esbuild.entryPoint": {
+        "vscode-web-esbuild.configPath": {
           "type": "string",
-          "default": "src/index.ts",
-          "description": "Bundle entry point"
+          "default": "esbuild.config.json",
+          "description": "Configuration file path"
         },
-        "vscode-web-esbuild.format": {
+        "vscode-web-esbuild.glob": {
           "type": "string",
-          "default": "esm",
-          "enum": [
-            "esm",
-            "cjs",
-            "iife"
-          ],
-          "description": "Format"
-        },
-        "vscode-web-esbuild.outdir": {
-          "type": "string",
-          "default": "dist",
-          "description": "Output directory"
-        },
-        "vscode-web-esbuild.minify": {
-          "type": "boolean",
-          "default": false,
-          "description": "Minify"
+          "default": "**/src/**",
+          "description": "Watch glob pattern"
         }
       }
     }
