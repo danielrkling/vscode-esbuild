@@ -10,16 +10,25 @@ import {
 import { initialize, build } from "esbuild-wasm";
 import { fsPlugin } from "./fs-plugin";
 import { httpPlugin } from "./http-plugin";
+import { nodeResolvePlugin } from "./node-resolve";
 
 let initialized = false;
 let outputWindow: OutputChannel;
 let watcher: FileSystemWatcher | undefined;
 
+const defaultConfig = {
+  entryPoints: ["src/index.ts"],
+  bundle: true,
+  outdir: "dist",
+  minify: false,
+  format: "esm",
+};
+
 export async function activate(context: ExtensionContext) {
   if (!initialized) {
     await initialize({
       worker: true,
-      wasmURL: "https://unpkg.com/esbuild-wasm/esbuild.wasm",
+      wasmURL: "https://esm.sh/esbuild-wasm@0.25.8/esbuild.wasm",
     });
     initialized = true;
     outputWindow = window.createOutputChannel("esbuild");
@@ -42,7 +51,7 @@ export async function activate(context: ExtensionContext) {
     watcher.onDidCreate(buildConfig);
     watcher.onDidDelete(buildConfig);
     outputWindow.appendLine(`Starting file watcher for ${glob}`);
-    buildConfig()
+    buildConfig();
   });
 
   commands.registerCommand("vscode-web-esbuild.unwatch", async () => {
@@ -61,13 +70,28 @@ async function getConfig() {
     const configPath: string =
       workspace.getConfiguration("vscode-web-esbuild").get("configPath") ||
       "esbuild.config.json";
-    outputWindow.appendLine(`Reading config file: ${configPath.toString()}`);
-    const buffer = await workspace.fs.readFile(
-      Uri.joinPath(workspace.workspaceFolders![0].uri, configPath)
-    );
-    const configContents = await workspace.decode(buffer);
-    const config = JSON.parse(configContents);
-    return config;
+    return workspace.fs
+      .readFile(Uri.joinPath(workspace.workspaceFolders![0].uri, configPath))
+      .then(
+        async (buffer) => {
+          workspace.decode(buffer);
+          outputWindow.appendLine(
+            `Reading config file: ${configPath.toString()}`
+          );
+          const configContents = await workspace.decode(buffer);
+          return JSON.parse(configContents);
+        },
+        async () => {
+          outputWindow.appendLine(
+            `No config file found, using default config.`
+          );
+          await workspace.fs.writeFile(
+            Uri.joinPath(workspace.workspaceFolders![0].uri, configPath),
+            await workspace.encode(JSON.stringify(defaultConfig, null, 2))
+          );
+          return defaultConfig;
+        }
+      );
   } catch (error) {
     outputWindow.appendLine(
       `Error reading config file: ${
@@ -87,7 +111,7 @@ async function buildConfig() {
     const config = await getConfig();
 
     const result = await build({
-      plugins: [httpPlugin(), fsPlugin()],
+      plugins: [httpPlugin(), nodeResolvePlugin],
       ...config,
     });
 
