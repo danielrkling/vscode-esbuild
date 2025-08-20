@@ -1,6 +1,5 @@
 import { add } from "./math";
-
-import {chunk} from "lodash"
+import {createSignal} from "solid-js"
 
 const x: number = 12
-console.log(add(x, 8),chunk);
+console.log(add(x, 8),createSignal);

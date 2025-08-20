@@ -5,5 +5,8 @@
     "bundle": true,
     "outdir": "dist",
     "minify": false,
-    "format": "esm"
+    "format": "esm",
+    "alias":{
+        "solid-js":"https://esm.sh/solid-js"
+    }
 }

@@ -101,24 +101,24 @@ export const nodeResolvePlugin: Plugin = {
           (await resolveFileWithExtensions(basePath)) ||
           (await resolveAsDirectory(basePath));
         if (resolved) {
-          return { path: resolved.toString(), namespace: "vscode-fs" };
+          return { path: resolved.toString(), namespace: "node-resolve" };
         }
       } else {
         const importerDir = resolveDir;
         const resolved = await resolveNodeModules(path, importerDir);
         if (resolved) {
-          return { path: resolved.toString(), namespace: "vscode-fs" };
+          return { path: resolved.toString(), namespace: "node-resolve" };
         }
       }
 
       return { external: true }; // fallback if nothing is resolved
     });
 
-    build.onLoad({ filter: /.*/, namespace: "vscode-fs" }, async (args) => {
+    build.onLoad({ filter: /.*/, namespace: "node-resolve" }, async (args) => {
       try {
         const bytes = await workspace.fs.readFile(Uri.parse(args.path));
         return {
-          contents: bytes,
+          contents: await workspace.decode(bytes),
           loader: "default",
         };
       } catch (err) {

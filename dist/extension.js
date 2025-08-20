@@ -2478,10 +2478,9 @@ function resolveLoader(path) {
   return void 0;
 }
 const fs = vscode.workspace.fs;
-const extensions = ["", ".ts", ".tsx", ".js", ".jsx", ".json"];
+const extensions = ["", ".ts", ".tsx", ".js", ".mjs", ".jsx", ".json"];
 async function fileExists(uri) {
   try {
-    console.log("Checking file existence:", uri.toString());
     const stat = await fs.stat(uri);
     return stat.type === vscode.FileType.File;
   } catch {
@@ -2507,7 +2506,9 @@ async function resolveDirectory(uri) {
   const packageUri = vscode.Uri.joinPath(uri, "package.json");
   if (await fileExists(packageUri)) {
     try {
-      const pkg = JSON.parse(await vscode.workspace.decode(await fs.readFile(packageUri)));
+      const pkg = JSON.parse(
+        await vscode.workspace.decode(await fs.readFile(packageUri))
+      );
       if (pkg.module || pkg.main) {
         const entry = vscode.Uri.joinPath(uri, pkg.module || pkg.main);
         const resolved = resolveFileWithExtensions(entry) || resolveAsDirectory(entry);
@@ -2519,7 +2520,6 @@ async function resolveDirectory(uri) {
   return resolveFileWithExtensions(vscode.Uri.joinPath(uri, "index"));
 }
 async function resolveAsDirectory(uri) {
-  console.log("Resolving as directory:", uri.toString());
   if (await directoryExists(uri)) {
     return resolveDirectory(uri);
   }
@@ -2528,12 +2528,14 @@ async function resolveAsDirectory(uri) {
 async function resolveNodeModules(importPath, importerDir) {
   let currentDir = importerDir;
   while (true) {
-    const nodeModulesPath = vscode.Uri.joinPath(currentDir, "node_modules", importPath);
+    const nodeModulesPath = vscode.Uri.joinPath(
+      currentDir,
+      "node_modules",
+      importPath
+    );
     const resolved = await resolveFileWithExtensions(nodeModulesPath) || await resolveAsDirectory(nodeModulesPath);
-    console.log(resolved);
     if (resolved) return resolved;
     const parentDir = vscode.Uri.joinPath(currentDir, "../");
-    console.log(parentDir.toString(), currentDir.toString());
     if (parentDir === currentDir) break;
     currentDir = parentDir;
   }
@@ -2544,31 +2546,27 @@ const nodeResolvePlugin = {
   setup(build) {
     build.onResolve({ filter: /.*/ }, async (args) => {
       const { path } = args;
-      const resolveDir = args.kind === "entry-point" ? vscode.workspace.workspaceFolders[0].uri : vscode.Uri.parse(
-        args.importer.split("/").slice(0, -1).join("/")
-      );
+      const resolveDir = args.kind === "entry-point" ? vscode.workspace.workspaceFolders[0].uri : vscode.Uri.parse(args.importer.split("/").slice(0, -1).join("/"));
       if (path.startsWith(".") || path.startsWith("/") || args.kind === "entry-point") {
         const basePath = vscode.Uri.joinPath(resolveDir, path);
         const resolved = await resolveFileWithExtensions(basePath) || await resolveAsDirectory(basePath);
         if (resolved) {
-          return { path: resolved.toString(), namespace: "vscode-fs" };
+          return { path: resolved.toString(), namespace: "node-resolve" };
         }
       } else {
-        console.log("Resolving node module:", path);
         const importerDir = resolveDir;
         const resolved = await resolveNodeModules(path, importerDir);
-        console.log("Resolved node module:", resolved);
         if (resolved) {
-          return { path: resolved.toString(), namespace: "vscode-fs" };
+          return { path: resolved.toString(), namespace: "node-resolve" };
         }
       }
       return { external: true };
     });
-    build.onLoad({ filter: /.*/, namespace: "vscode-fs" }, async (args) => {
+    build.onLoad({ filter: /.*/, namespace: "node-resolve" }, async (args) => {
       try {
         const bytes = await vscode.workspace.fs.readFile(vscode.Uri.parse(args.path));
         return {
-          contents: bytes,
+          contents: await vscode.workspace.decode(bytes),
           loader: "default"
         };
       } catch (err) {
@@ -2576,6 +2574,60 @@ const nodeResolvePlugin = {
           errors: [{ text: `Failed to read file: ${args.path}` }]
         };
       }
+    });
+  }
+};
+function r(r2, e, n) {
+  var i, t, o;
+  void 0 === n && (n = {});
+  var a = null != (i = n.isImmediate) && i, u = null != (t = n.callback) && t, c = n.maxWait, v = Date.now(), l = [];
+  function f() {
+    if (void 0 !== c) {
+      var r3 = Date.now() - v;
+      if (r3 + e >= c) return c - r3;
+    }
+    return e;
+  }
+  var d = function() {
+    var e2 = [].slice.call(arguments), n2 = this;
+    return new Promise(function(i2, t2) {
+      var c2 = a && void 0 === o;
+      if (void 0 !== o && clearTimeout(o), o = setTimeout(function() {
+        if (o = void 0, v = Date.now(), !a) {
+          var i3 = r2.apply(n2, e2);
+          u && u(i3), l.forEach(function(r3) {
+            return (0, r3.resolve)(i3);
+          }), l = [];
+        }
+      }, f()), c2) {
+        var d2 = r2.apply(n2, e2);
+        return u && u(d2), i2(d2);
+      }
+      l.push({ resolve: i2, reject: t2 });
+    });
+  };
+  return d.cancel = function(r3) {
+    void 0 !== o && clearTimeout(o), l.forEach(function(e2) {
+      return (0, e2.reject)(r3);
+    }), l = [];
+  }, d;
+}
+const aliasPlugin = {
+  name: "alias-plugin",
+  setup(build) {
+    const aliases = build.initialOptions.alias || {};
+    const aliasKeys = Object.keys(aliases);
+    build.onResolve({ filter: /.*/ }, (args) => {
+      for (const key of aliasKeys) {
+        if (args.path === key || args.path.startsWith(key + "/")) {
+          const replacement = aliases[key] + args.path.slice(key.length);
+          return {
+            path: replacement,
+            namespace: args.namespace
+          };
+        }
+      }
+      return;
     });
   }
 };
@@ -2589,6 +2641,7 @@ const defaultConfig = {
   minify: false,
   format: "esm"
 };
+const buildDebounce = r(buildConfig, 200, { maxWait: 2e3 });
 async function activate(context) {
   if (!initialized) {
     await browserExports.initialize({
@@ -2607,9 +2660,9 @@ async function activate(context) {
     }
     const glob = vscode.workspace.getConfiguration("vscode-web-esbuild").get("glob");
     watcher = vscode.workspace.createFileSystemWatcher(glob);
-    watcher.onDidChange(buildConfig);
-    watcher.onDidCreate(buildConfig);
-    watcher.onDidDelete(buildConfig);
+    watcher.onDidChange(() => buildDebounce());
+    watcher.onDidCreate(() => buildDebounce());
+    watcher.onDidDelete(() => buildDebounce());
     outputWindow.appendLine(`Starting file watcher for ${glob}`);
     buildConfig();
   });
@@ -2623,10 +2676,21 @@ async function activate(context) {
     }
   });
 }
+let lastModified;
+let lastConfig;
 async function getConfig() {
   try {
     const configPath = vscode.workspace.getConfiguration("vscode-web-esbuild").get("configPath") || "esbuild.config.json";
-    return vscode.workspace.fs.readFile(vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, configPath)).then(
+    const configUri = vscode.Uri.joinPath(
+      vscode.workspace.workspaceFolders[0].uri,
+      configPath
+    );
+    const stat = await vscode.workspace.fs.stat(configUri);
+    if (lastModified && stat.mtime <= lastModified) {
+      return lastConfig;
+    }
+    lastModified = stat.mtime;
+    lastConfig = await vscode.workspace.fs.readFile(configUri).then(
       async (buffer) => {
         vscode.workspace.decode(buffer);
         outputWindow.appendLine(
@@ -2636,9 +2700,7 @@ async function getConfig() {
         return JSON.parse(configContents);
       },
       async () => {
-        outputWindow.appendLine(
-          `No config file found, using default config.`
-        );
+        outputWindow.appendLine(`No config file found, using default config.`);
         await vscode.workspace.fs.writeFile(
           vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, configPath),
           await vscode.workspace.encode(JSON.stringify(defaultConfig, null, 2))
@@ -2646,6 +2708,7 @@ async function getConfig() {
         return defaultConfig;
       }
     );
+    return lastConfig;
   } catch (error) {
     outputWindow.appendLine(
       `Error reading config file: ${error instanceof Error ? error.message : String(error)}`
@@ -2660,7 +2723,7 @@ async function buildConfig() {
     }
     const config = await getConfig();
     const result = await browserExports.build({
-      plugins: [httpPlugin(), nodeResolvePlugin],
+      plugins: [aliasPlugin, httpPlugin(), nodeResolvePlugin],
       ...config
     });
     result.outputFiles?.forEach((file) => {

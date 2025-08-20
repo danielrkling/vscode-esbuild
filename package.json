@@ -2,7 +2,7 @@
   "name": "vscode-web-esbuild",
   "displayName": "ESBuild - VS Code Web",
   "description": "Use esbuild-wasm to bundle your project in VS Code Web.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "danielrkling",
   "repository": "https://github.com/danielrkling/vscode-esbuild",
   "engines": {
@@ -28,7 +28,7 @@
         "command": "vscode-web-esbuild.watch",
         "title": "ESBuild - Watch"
       },
-            {
+      {
         "command": "vscode-web-esbuild.unwatch",
         "title": "ESBuild - Unwatch"
       }
@@ -76,6 +76,7 @@
     "@rolldown/browser": "^1.0.0-beta.23",
     "@vscode/wasm-wasi": "^1.0.1",
     "esbuild": "^0.25.8",
-    "esbuild-wasm": "^0.25.8"
+    "esbuild-wasm": "^0.25.8",
+    "ts-debounce": "^4.0.0"
   }
 }
